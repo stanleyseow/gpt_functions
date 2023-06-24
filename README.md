@@ -3,5 +3,5 @@
 
 ## Call with below URL
 ```
-curl -X POST \\n  http://localhost:5050/ask \\n  -H 'Content-Type: application/json' \\n  -d '{ "prompt": "What is the  weather forecast in Singapore ?" }'
+curl -X POST http://localhost:5050/ask -H 'Content-Type: application/json' -d '{ "prompt": "What is the  weather forecast in Kuala Lumpur ?" }'
 ```
