@@ -8,19 +8,31 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
+const endpoint = "https://api.openai.com/v1/engines/text-davinci-003/completions"
+
+const params = {
+  prompt: prompt,
+  max_tokens: 100,
+  temperature: 0.1,
+  n: 1
+}
+
+const headers = {
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+  }
+}
+
 const port = process.env.PORT || 5050;
 
 async function lookupTime(location) {
   const response = await axios.get(`http://worldtimeapi.org/api/timezone/${location}`);
-
   const { datetime } = response.data;
-
-  const localTime = new Date(datetime).toLocaleTimeString(undefined, { house: 'numeric', minute: 'numeric', hour12: true});
-
-  console.log(`Current time in ${location} in ${localTime}` )
+  const localTime = new Date(datetime).toLocaleTimeString(undefined, { house: 'numeric', minute: 'numeric', hour12: true });
+  console.log(`Current time in ${location} in ${localTime}`)
 
 }
-
 
 app.post("/ask", async (req, res) => {
   const prompt = req.body.prompt;
@@ -29,18 +41,8 @@ app.post("/ask", async (req, res) => {
       throw new Error("Uh oh, no prompt was provided");
     }
 
-    const response = await rateLimitedAxios.post('https://api.openai.com/v1/engines/text-davinci-003/completions', {
-      prompt: prompt,
-      max_tokens: 100,
-      temperature: 0.1,
-      n: 1
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-      }
-    });
-
+    // configure at top of page endpoint, params, headers
+    const response = await rateLimitedAxios.post(endpoint, params, headers);
     const completion = response.data.choices[0].text;
     return res.status(200).json({
       success: true,
