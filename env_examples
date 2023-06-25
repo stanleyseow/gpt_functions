@@ -1,0 +1,4 @@
+// Rename this file to .env
+OPENAI_API_KEY=
+OPENWX_API_KEY=
+PORT=5050
