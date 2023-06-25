@@ -52,7 +52,7 @@ async function lookupWeather(location_id) {
   //console.log(response.data.weather[0].description)
 
   const forecast = response.data.weather[0].description
-  const name =  response.data.name
+  const name = response.data.name
   const weather_code = response.data.weather[0].id
   const temp = response.data.main.temp
   const temp_min = response.data.main.temp_min
@@ -60,6 +60,11 @@ async function lookupWeather(location_id) {
   console.log(weather_code, forecast, temp, temp_min, temp_max)
 
   return `curent weather in ${name} is ${forecast} with temperature of ${temp}`
+}
+
+async function getStartEndDate(startDate, endDate) {
+  console.log(startDate, endDate)
+  return `The startdate is ${startDate}, the enddate is ${endDate}`
 }
 
 app.post("/ask", async (req, res) => {
@@ -109,6 +114,36 @@ app.post("/ask", async (req, res) => {
         }
 
       },
+      {
+        name: "getStartEndDate",
+        description: "get the start and end date for a given time period",
+        parameters: {
+          type: "object",
+          properties: {
+            start_date: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the start date, but it should be written in ISO 8601 Date String YYYY-MM-DD format"
+            },
+            end_date: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the end date, but it should be written in ISO 8601 Date String YYYY-MM-DD format"
+            },
+            // start_epoch: {
+            //   type: "string",
+            //   // describe to chatGPT what format you need for the API calls
+            //   description: "Get the start date, but it should be written in Unix epoch format"
+            // },
+            // end_epoch: {
+            //   type: "string",
+            //   // describe to chatGPT what format you need for the API calls
+            //   description: "Get the end date, but it should be written in Unix epoch format"
+            // },
+          },
+          required: ["start_date", "end_date" ]
+        }
+      },
 
     ],
     function_call: "auto"
@@ -138,20 +173,46 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & location: ", completionArguments, completionArguments.location)
 
-        result1 = await lookupTime(completionArguments.location)
+        result = await lookupTime(completionArguments.location)
+
+        return res.status(200).json({
+          success: true,
+          message: `${result},`,
+        });
       }
 
       if (functionCallName === "lookupWeather") {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & id: ", completionArguments, completionArguments.location_id)
-        result2 = await lookupWeather(completionArguments.location_id)
+        result = await lookupWeather(completionArguments.location_id)
+
+        return res.status(200).json({
+          success: true,
+          message: `${result}`,
+        });
       }
 
-      return res.status(200).json({
-        success: true,
-        message: `${result1}, ${result2}\n`,
-      });
+      if (functionCallName === "getStartEndDate") {
+        // Need to parse the arguments with JSON.parse()
+        const parseDate = JSON.parse(completionResponse.function_call.arguments)
+        console.log("Start & end date: ", parseDate, parseDate.start_date, parseDate.end_date)
+        console.log("Start & end epoch: ", parseDate.start_epoch, parseDate.end_epoch)
+
+        let date1 = new Date(parseDate.start_date);
+        let date2 = new Date(parseDate.end_date);
+
+        console.log("epoch start: ", Math.floor(date1.getTime() / 1000));
+        console.log("epoch end:   ", Math.floor(date2.getTime() / 1000));
+
+        result = await getStartEndDate(parseDate.start_date, parseDate.end_date)
+
+        return res.status(200).json({
+          success: true,
+          message: `${result},`,
+        });
+      }
+
 
     }
 
