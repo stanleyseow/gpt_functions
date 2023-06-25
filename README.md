@@ -1,10 +1,12 @@
-# gpt_functions
+# openai call functions
 
 ## Functions available :
 - current time in a city
 - weather forecast in a city 
 - start and stop date ( mostly for database queries )
 
+### Get your openweathermap here https://openweathermap.org/ as OPENWX_API_KEY
+### Get your openai APIKEYS from https://openai.com
 
 ## Call with below URL
 ```
