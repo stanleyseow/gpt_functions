@@ -42,6 +42,7 @@ async function lookupTime(location) {
     { hour: 'numeric', minute: 'numeric', hour12: true });
   console.log(`Current time in ${location} in ${localTime}`)
 
+  return `current time in ${location} in ${localTime}`;
 }
 
 async function lookupWeather(location_id) {
@@ -51,11 +52,14 @@ async function lookupWeather(location_id) {
   //console.log(response.data.weather[0].description)
 
   const forecast = response.data.weather[0].description
+  const name =  response.data.name
   const weather_code = response.data.weather[0].id
   const temp = response.data.main.temp
   const temp_min = response.data.main.temp_min
   const temp_max = response.data.main.temp_max
   console.log(weather_code, forecast, temp, temp_min, temp_max)
+
+  return `curent weather in ${name} is ${forecast} with temperature of ${temp}`
 }
 
 app.post("/ask", async (req, res) => {
@@ -134,15 +138,20 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & location: ", completionArguments, completionArguments.location)
 
-        lookupTime(completionArguments.location)
+        result1 = await lookupTime(completionArguments.location)
       }
 
       if (functionCallName === "lookupWeather") {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & id: ", completionArguments, completionArguments.location_id)
-        lookupWeather(completionArguments.location_id)
+        result2 = await lookupWeather(completionArguments.location_id)
       }
+
+      return res.status(200).json({
+        success: true,
+        message: `${result1}, ${result2}\n`,
+      });
 
     }
 
