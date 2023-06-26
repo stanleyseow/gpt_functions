@@ -197,6 +197,13 @@ app.post("/ask", async (req, res) => {
         });
       }
 
+    } else {
+      console.log("Not a function call, just return the content: " )
+      return res.status(200).json({
+        success: true,
+        message: completionResponse.content,
+      });
+
     }
 
   } catch (error) {
