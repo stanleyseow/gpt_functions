@@ -12,9 +12,27 @@ const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
+
+//const endpoint = "https://api.openai.com/v1/engines/text-davinci-003/completions"
+
+
+
+// const params = {
+//   prompt: prompt,
+//   max_tokens: 100,
+//   temperature: 0.1,
+//   functions
+// }
+
+// only needed for Axios
+// const headers = {
+//   headers: {
+//     'Content-Type': 'application/json',
+//     'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+//   }
+// }
+
 const port = process.env.PORT || 5050;
-
-
 
 async function lookupTime(location) {
   const response = await axios.get(`http://worldtimeapi.org/api/timezone/${location}`);
@@ -34,7 +52,7 @@ async function lookupWeather(location_id) {
   //console.log(response.data.weather[0].description)
 
   const forecast = response.data.weather[0].description
-  const name = response.data.name
+  const name =  response.data.name
   const weather_code = response.data.weather[0].id
   const temp = response.data.main.temp
   const temp_min = response.data.main.temp_min
@@ -42,18 +60,6 @@ async function lookupWeather(location_id) {
   console.log(weather_code, forecast, temp, temp_min, temp_max)
 
   return `curent weather in ${name} is ${forecast} with temperature of ${temp}`
-}
-
-async function getStartEndDate(startDate, endDate) {
-  console.log(startDate, endDate)
-  return `The startdate is ${startDate}, the enddate is ${endDate}`
-}
-
-async function lookupBinancePrice(coinPair) {
-  const response = await axios.get(`https://api.binance.com/api/v3/avgPrice?symbol=${coinPair}`);
-  //console.log(response.data)
-  const coinPrice = response.data.price
-  return `the average price of ${coinPair} is ${coinPrice}`
 }
 
 app.post("/ask", async (req, res) => {
@@ -116,26 +122,6 @@ app.post("/ask", async (req, res) => {
           required: ["coinpair"]
         }
       },
-      {
-        name: "getStartEndDate",
-        description: "get the start and end date for a given time period",
-        parameters: {
-          type: "object",
-          properties: {
-            start_date: {
-              type: "string",
-              // describe to chatGPT what format you need for the API calls
-              description: "Get the start date, but it should be written in ISO 8601 Date String YYYY-MM-DD format"
-            },
-            end_date: {
-              type: "string",
-              // describe to chatGPT what format you need for the API calls
-              description: "Get the end date, but it should be written in ISO 8601 Date String YYYY-MM-DD format"
-            },
-          },
-          required: ["start_date", "end_date"]
-        }
-      },
 
     ],
     function_call: "auto"
@@ -165,37 +151,27 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & location: ", completionArguments, completionArguments.location)
 
-        result = await lookupTime(completionArguments.location)
-
-        return res.status(200).json({
-          success: true,
-          message: `${result},`,
-        });
+        result1 = await lookupTime(completionArguments.location)
       }
 
       if (functionCallName === "lookupWeather") {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & id: ", completionArguments, completionArguments.location_id)
-        result = await lookupWeather(completionArguments.location_id)
-
-        return res.status(200).json({
-          success: true,
-          message: `${result}`,
-        });
+        result2 = await lookupWeather(completionArguments.location_id)
       }
 
       if (functionCallName === "lookupBinancePrice") {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("coin pair: ", completionArguments, completionArguments.coinpair)
-        result = await lookupBinancePrice(completionArguments.coinpair)
-
-        return res.status(200).json({
-          success: true,
-          message: `${result}`,
-        });
+        //result2 = await lookupWeather(completionArguments.location_id)
       }
+
+      return res.status(200).json({
+        success: true,
+        message: `${result1}, ${result2}\n`,
+      });
 
     }
 
