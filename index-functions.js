@@ -3,6 +3,14 @@ const axios = require('axios');
 //const rateLimit = require('axios-rate-limit');
 //const rateLimitedAxios = rateLimit(axios.create(), { maxRequests: 5, perMilliseconds: 1000 }); 
 
+const { Spot } = require('@binance/connector')
+const bin_apiKey = process.env.BINANCE_API_KEY 
+const bin_apiSecret = process.env.BINANCE_API_SECRET
+
+const binance = new Spot(bin_apiKey, bin_apiSecret)
+// Examples here 
+//https://github.com/binance/binance-connector-node/tree/master/examples
+
 const express = require("express");
 const app = express();
 app.use(express.json());
@@ -50,10 +58,17 @@ async function getStartEndDate(startDate, endDate) {
 }
 
 async function lookupBinancePrice(coinPair) {
-  const response = await axios.get(`https://api.binance.com/api/v3/avgPrice?symbol=${coinPair}`);
+  const response = await binance.avgPrice(coinPair);
   //console.log(response.data)
   const coinPrice = response.data.price
   return `the average price of ${coinPair} is ${coinPrice}`
+}
+
+async function binanceLoanHistory(coinPair) {
+  const response = await binance.loanHistory(coinPair);
+  console.log("Response: ", response.data)
+  const coinPrice = response.data
+  return `the loan history ${coinPair} is ${coinPrice}`
 }
 
 app.post("/ask", async (req, res) => {
@@ -108,12 +123,27 @@ app.post("/ask", async (req, res) => {
           type: "object",
           properties: {
             coinpair: {
-              type: "number",
+              type: "string",
               // describe to chatGPT what format you need for the API calls
               description: "The crypto token or coin, e.g. Etherum USDT pair, should be written in ETHUSDT format"
             },
           },
           required: ["coinpair"]
+        }
+      },
+      {
+        name: "BinanceLoanHistory",
+        description: "get the current crypto loan history",
+        parameters: {
+          type: "object",
+          properties: {
+            coin: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "The crypto token or coin, e.g. Binance, should be written in BNB format"
+            },
+          },
+          required: ["coin"]
         }
       },
       {
@@ -190,10 +220,22 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("coin pair: ", completionArguments, completionArguments.coinpair)
         result = await lookupBinancePrice(completionArguments.coinpair)
+        
+        return res.status(200).json({
+          success: true,
+          message: `${result} `,
+        });
+      }
+
+      if (functionCallName === "BinanceLoanHistory") {
+        // Need to parse the arguments with JSON.parse()
+        const completionArguments = JSON.parse(completionResponse.function_call.arguments)
+        console.log("coin: ", completionArguments, completionArguments.coin)
+        result = await binanceLoanHistory(completionArguments.coin)
 
         return res.status(200).json({
           success: true,
-          message: `${result}`,
+          message: `${result} `,
         });
       }
 
