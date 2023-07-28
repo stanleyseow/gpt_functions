@@ -4,8 +4,10 @@ const axios = require('axios');
 //const rateLimitedAxios = rateLimit(axios.create(), { maxRequests: 5, perMilliseconds: 1000 }); 
 
 const { Spot } = require('@binance/connector')
-const bin_apiKey = process.env.BINANCE_API_KEY 
+const bin_apiKey = process.env.BINANCE_API_KEY
 const bin_apiSecret = process.env.BINANCE_API_SECRET
+
+const rapidAPI = process.env.RAPID_API
 
 const binance = new Spot(bin_apiKey, bin_apiSecret)
 // Examples here 
@@ -22,6 +24,20 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 const port = process.env.PORT || 5050;
 
+
+async function getAirportCode(iata) {
+  const response = await axios.get(`https://api.api-ninjas.com/v1/airports?iata=${iata}`, {
+    headers: {
+      'X-Api-Key': rapidAPI
+    },
+    params: {}
+  })
+
+  console.log(response.data)
+  const data = response.data[0]
+
+  return `the airport name is ${data.name}, iata code is ${data.iata}, the timezone is ${data.timezone}`
+}
 
 
 async function lookupTime(location) {
@@ -166,6 +182,22 @@ app.post("/ask", async (req, res) => {
           required: ["start_date", "end_date"]
         }
       },
+      {
+        name: "getAirportCode",
+        description: "get the airport codes in iata format",
+        parameters: {
+          type: "object",
+          properties: {
+            iata: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the airport code in iata, example KUL for Kuala Lumpur airport, format should be IATA 3-character airport code"
+            },
+            
+          },
+          required: ["iata"]
+        }
+      },
 
     ],
     function_call: "auto"
@@ -220,7 +252,7 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("coin pair: ", completionArguments, completionArguments.coinpair)
         result = await lookupBinancePrice(completionArguments.coinpair)
-        
+
         return res.status(200).json({
           success: true,
           message: `${result} `,
@@ -239,8 +271,20 @@ app.post("/ask", async (req, res) => {
         });
       }
 
+      if (functionCallName === "getAirportCode") {
+        // Need to parse the arguments with JSON.parse()
+        const completionArguments = JSON.parse(completionResponse.function_call.arguments)
+        console.log("iata: ", completionArguments, completionArguments.iata)
+        result = await getAirportCode(completionArguments.iata)
+
+        return res.status(200).json({
+          success: true,
+          message: `${result} `,
+        });
+      }
+
     } else {
-      console.log("Not a function call, just return the content: " )
+      console.log("Not a function call, just return the content: ")
       return res.status(200).json({
         success: true,
         message: completionResponse.content,
