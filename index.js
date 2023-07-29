@@ -26,7 +26,7 @@ const port = process.env.PORT || 5050;
 
 
 // return values should not have response.data 
-async function runAllCityfunctions(city, iata, tz) {
+async function runAllCityfunctions(city, iata, tz, wx_id) {
 
   // getAirportCode returned already formatted
   const iataRes = await getAirportCode(iata);
@@ -35,9 +35,9 @@ async function runAllCityfunctions(city, iata, tz) {
   try {
     // Call the functions concurrently using Promise.all
     const results = await Promise.all([
-      getAirQuality(iataRes.city), 
+      getAirQuality(city), 
       lookupTime(tz), 
-      lookupWeather(iataRes.city),
+      lookupWeather(wx_id),
     ]);
 
     let airquality = results[0]
@@ -50,9 +50,6 @@ async function runAllCityfunctions(city, iata, tz) {
 
     // When all functions have completed, 'results' will be an array containing the resolved values
     //console.log(results); // ['Result from function 1', 'Result from function 2', 'Result from function 3']
-
-    // You can now return the results or perform any other operation with them
-    //results[3] = iataRes;
 
     // format everything here before return needed results to gpt
     const { datetime } = timezone;
@@ -140,9 +137,9 @@ async function lookupTime(location) {
   return response.data
 }
 
-async function lookupWeather(city) {
+async function lookupWeather(id) {
   const response = await
-    axios.get(`https://api.openweathermap.org/data/2.5/weather?units=metric&appid=${process.env.OPENWX_API_KEY}&q=${city}`);
+    axios.get(`https://api.openweathermap.org/data/2.5/weather?units=metric&appid=${process.env.OPENWX_API_KEY}&id=${id}`);
 
   //console.log(response.data.weather[0].description)
 
@@ -297,7 +294,7 @@ app.post("/ask", async (req, res) => {
             city: {
               type: "string",
               // describe to chatGPT what format you need for the API calls
-              description: "Please provide the city name or city short form, and it will return the full name of the city. Example: SF or San Fran, it will return San Francisco"
+              description: "Please provide the city name or city short form, and it will return the full name of the city."
             },
             iata: {
               type: "string",
@@ -308,10 +305,20 @@ app.post("/ask", async (req, res) => {
               type: "string",
               // describe to chatGPT what format you need for the API calls
               description: "The location, e.g. London, England, but it should be written in a timezone name Asia/KualaLumpur"
+            }, 
+            wx_id: {
+              type: "number",
+              // describe to chatGPT what format you need for the API calls
+              description: "The city, e.g. New York, USA, but it should be written in a openweathermap city id format"
+            },
+            wx_city: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "The city, e.g. New York, USA, but written in format of city name"
             }
             
           },
-          required: ["city", "iata", "tz"]
+          required: ["city", "iata", "tz", "wx_id", "wx_city"]
         }
       },
 
@@ -412,7 +419,7 @@ app.post("/ask", async (req, res) => {
         console.log("city: ", completionArguments, completionArguments.city)
         args = completionArguments
 
-      runAllCityfunctions(args.city,args.iata, args.tz )
+      runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id )
         .then((results) => {
           console.log('All functions completed:', results);
 
