@@ -25,6 +25,77 @@ const openai = new OpenAIApi(configuration);
 const port = process.env.PORT || 5050;
 
 
+// return values should not have response.data 
+async function runAllCityfunctions(city, iata, tz) {
+
+  // getAirportCode returned already formatted
+  const iataRes = await getAirportCode(iata);
+  console.log("iata city: ",iataRes.city)
+
+  try {
+    // Call the functions concurrently using Promise.all
+    const results = await Promise.all([
+      getAirQuality(iataRes.city), 
+      lookupTime(tz), 
+      lookupWeather(iataRes.city),
+    ]);
+
+    let airquality = results[0]
+    let timezone = results[1]
+    let wx = results[2]
+
+    //console.log("air: ", airquality)
+    //console.log("tz: ", timezone)
+    //console.log("wx: ",wx)
+
+    // When all functions have completed, 'results' will be an array containing the resolved values
+    //console.log(results); // ['Result from function 1', 'Result from function 2', 'Result from function 3']
+
+    // You can now return the results or perform any other operation with them
+    //results[3] = iataRes;
+
+    // format everything here before return needed results to gpt
+    const { datetime } = timezone;
+    const localTime = new Date(datetime).toLocaleTimeString(undefined,
+    { hour: 'numeric', minute: 'numeric', hour12: true });
+
+    const forecast = wx.weather[0].description
+    const weather_code = wx.weather[0].id
+    const temp = wx.main.temp
+    const temp_min = wx.main.temp_min
+    const temp_max = wx.main.temp_max
+    const lat = wx.coord.lat
+    const lon = wx.coord.lon
+
+    console.log(weather_code, forecast, temp, temp_min, temp_max, lat, lon)
+
+
+    let result2 = {}
+    result2.input = city
+    result2.name = iataRes.city
+    result2.country = iataRes.country
+    result2.iata = iata
+    result2.airport = iataRes.name
+    result2.localtime = localTime
+    result2.tz = tz
+    result2.PM25 = airquality.PM25.concentration
+    result2.PM10 = airquality.PM10.concentration
+    result2.forecastCode = weather_code
+    result2.forecast = forecast
+    result2.temp = temp
+    result2.temp_min = temp_min
+    result2.temp_max = temp_max
+    result2.lat = lat
+    result2.lon = lon
+
+    return result2
+    //return results;
+  } catch (error) {
+    console.error('An error occurred:', error);
+    throw error;
+  }
+}
+
 async function getAirportCode(iata) {
   const response = await axios.get(`https://api.api-ninjas.com/v1/airports?iata=${iata}`, {
     headers: {
@@ -33,27 +104,45 @@ async function getAirportCode(iata) {
     params: {}
   })
 
-  console.log(response.data)
+  console.log("getAirportCode: ", response.data)
   const data = response.data[0]
 
-  return `the airport name is ${data.name}, iata code is ${data.iata}, the timezone is ${data.timezone}`
+  return data
+}
+
+async function getAirQuality(city) {
+  const response = await axios.get(`https://api.api-ninjas.com/v1/airquality?city=${city}`, {
+    headers: {
+      'X-Api-Key': rapidAPI
+    },
+    params: {}
+  })
+
+  //console.log(response.data)
+  const data = response.data
+  data.PM25 = data["PM2.5"]; // convert PM2.5 to PM25 removing the dot
+
+  return data
 }
 
 
 async function lookupTime(location) {
   const response = await axios.get(`http://worldtimeapi.org/api/timezone/${location}`);
-  //console.log(response.data)
+  
+  //console.log("lookupTime: ", response.data)
+  
   const { datetime } = response.data;
   const localTime = new Date(datetime).toLocaleTimeString(undefined,
     { hour: 'numeric', minute: 'numeric', hour12: true });
-  console.log(`Current time in ${location} in ${localTime}`)
+  //console.log(`Current time in ${location} in ${localTime}`)
 
-  return `current time in ${location} in ${localTime}`;
+  //return `current time in ${location} in ${localTime}`;
+  return response.data
 }
 
-async function lookupWeather(location_id) {
+async function lookupWeather(city) {
   const response = await
-    axios.get(`https://api.openweathermap.org/data/2.5/weather?units=metric&appid=${process.env.OPENWX_API_KEY}&id=${location_id}`);
+    axios.get(`https://api.openweathermap.org/data/2.5/weather?units=metric&appid=${process.env.OPENWX_API_KEY}&q=${city}`);
 
   //console.log(response.data.weather[0].description)
 
@@ -63,9 +152,10 @@ async function lookupWeather(location_id) {
   const temp = response.data.main.temp
   const temp_min = response.data.main.temp_min
   const temp_max = response.data.main.temp_max
-  console.log(weather_code, forecast, temp, temp_min, temp_max)
+  //console.log(weather_code, forecast, temp, temp_min, temp_max)
 
-  return `curent weather in ${name} is ${forecast} with temperature of ${temp}`
+  //return `curent weather in ${name} is ${forecast} with temperature of ${temp}`
+  return response.data
 }
 
 async function getStartEndDate(startDate, endDate) {
@@ -198,6 +288,33 @@ app.post("/ask", async (req, res) => {
           required: ["iata"]
         }
       },
+      {
+        name: "getCityData",
+        description: "get details info for a city",
+        parameters: {
+          type: "object",
+          properties: {
+            city: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Please provide the city name or city short form, and it will return the full name of the city. Example: SF or San Fran, it will return San Francisco"
+            },
+            iata: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the airport code in iata, example KUL for Kuala Lumpur airport, format should be IATA 3-character airport code"
+            },
+            tz: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "The location, e.g. London, England, but it should be written in a timezone name Asia/KualaLumpur"
+            }
+            
+          },
+          required: ["city", "iata", "tz"]
+        }
+      },
+
 
     ],
     function_call: "auto"
@@ -276,11 +393,39 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("iata: ", completionArguments, completionArguments.iata)
         result = await getAirportCode(completionArguments.iata)
+        console.log(result.city)
 
+        // Call other functions after first functions
+        result2 = await getAirQuality(result.city)
+
+        if ( result2 !== null ) {
         return res.status(200).json({
           success: true,
-          message: `${result} `,
+          message: `${result.name} ${result.iata} PM10: ${result2.PM10.concentration} PM2.5: ${result2.PM25.concentration}`,
         });
+        }
+      }
+
+      if (functionCallName === "getCityData") {
+        // Need to parse the arguments with JSON.parse()
+        const completionArguments = JSON.parse(completionResponse.function_call.arguments)
+        console.log("city: ", completionArguments, completionArguments.city)
+        args = completionArguments
+
+      runAllCityfunctions(args.city,args.iata, args.tz )
+        .then((results) => {
+          console.log('All functions completed:', results);
+
+          return res.status(200).json({
+            success: true,
+            message: results
+          });
+
+        })
+        .catch((error) => {
+          console.error('Error in one of the functions:', error);
+        });
+
       }
 
     } else {
