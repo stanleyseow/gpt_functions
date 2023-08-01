@@ -29,14 +29,21 @@ const port = process.env.PORT || 5050;
 async function runAllCityfunctions(city, iata, tz, wx_id) {
 
   // getAirportCode returned already formatted
-  const iataRes = await getAirportCode(iata);
-  console.log("iata city: ",iataRes.city)
+  let iataRes
+  try {
+    iataRes = await getAirportCode(iata, city);
+    console.log("iata city: ", iataRes.city)
+  } catch (error) {
+    console.error('Error for getAirportCode:', error.data);
+    throw error;
+  }
+
 
   try {
     // Call the functions concurrently using Promise.all
     const results = await Promise.all([
-      getAirQuality(city), 
-      lookupTime(tz), 
+      getAirQuality(city),
+      lookupTime(tz),
       lookupWeather(wx_id),
     ]);
 
@@ -54,7 +61,7 @@ async function runAllCityfunctions(city, iata, tz, wx_id) {
     // format everything here before return needed results to gpt
     const { datetime } = timezone;
     const localTime = new Date(datetime).toLocaleTimeString(undefined,
-    { hour: 'numeric', minute: 'numeric', hour12: true });
+      { hour: 'numeric', minute: 'numeric', hour12: true });
 
     const forecast = wx.weather[0].description
     const weather_code = wx.weather[0].id
@@ -88,18 +95,31 @@ async function runAllCityfunctions(city, iata, tz, wx_id) {
     return result2
     //return results;
   } catch (error) {
-    console.error('An error occurred:', error);
+    console.error('An error occurred:', error.data);
     throw error;
   }
 }
 
-async function getAirportCode(iata) {
-  const response = await axios.get(`https://api.api-ninjas.com/v1/airports?iata=${iata}`, {
-    headers: {
-      'X-Api-Key': rapidAPI
-    },
-    params: {}
-  })
+async function getAirportCode(iata, city) {
+
+  console.log("getAirportCode: ", iata, city)
+  let response;
+  // Check for nulls 
+  if (iata !== "" ) {
+    response = await axios.get(`https://api.api-ninjas.com/v1/airports?iata=${iata}`, {
+      headers: {
+        'X-Api-Key': rapidAPI
+      },
+      params: {}
+    })
+  } else {
+    response = await axios.get(`https://api.api-ninjas.com/v1/airports?city=${city}`, {
+      headers: {
+        'X-Api-Key': rapidAPI
+      },
+      params: {}
+    })
+  }
 
   console.log("getAirportCode: ", response.data)
   const data = response.data[0]
@@ -125,9 +145,9 @@ async function getAirQuality(city) {
 
 async function lookupTime(location) {
   const response = await axios.get(`http://worldtimeapi.org/api/timezone/${location}`);
-  
+
   //console.log("lookupTime: ", response.data)
-  
+
   const { datetime } = response.data;
   const localTime = new Date(datetime).toLocaleTimeString(undefined,
     { hour: 'numeric', minute: 'numeric', hour12: true });
@@ -280,7 +300,7 @@ app.post("/ask", async (req, res) => {
               // describe to chatGPT what format you need for the API calls
               description: "Get the airport code in iata, example KUL for Kuala Lumpur airport, format should be IATA 3-character airport code"
             },
-            
+
           },
           required: ["iata"]
         }
@@ -294,7 +314,7 @@ app.post("/ask", async (req, res) => {
             city: {
               type: "string",
               // describe to chatGPT what format you need for the API calls
-              description: "Please provide the city name or city short form, and it will return the full name of the city."
+              description: "Get the city name or city short form, e.g. NY or NYC and it will return the full name of the city, New York City."
             },
             iata: {
               type: "string",
@@ -305,7 +325,7 @@ app.post("/ask", async (req, res) => {
               type: "string",
               // describe to chatGPT what format you need for the API calls
               description: "The location, e.g. London, England, but it should be written in a timezone name Asia/KualaLumpur"
-            }, 
+            },
             wx_id: {
               type: "number",
               // describe to chatGPT what format you need for the API calls
@@ -316,7 +336,7 @@ app.post("/ask", async (req, res) => {
               // describe to chatGPT what format you need for the API calls
               description: "The city, e.g. New York, USA, but written in format of city name"
             }
-            
+
           },
           required: ["city", "iata", "tz", "wx_id", "wx_city"]
         }
@@ -405,11 +425,11 @@ app.post("/ask", async (req, res) => {
         // Call other functions after first functions
         result2 = await getAirQuality(result.city)
 
-        if ( result2 !== null ) {
-        return res.status(200).json({
-          success: true,
-          message: `${result.name} ${result.iata} PM10: ${result2.PM10.concentration} PM2.5: ${result2.PM25.concentration}`,
-        });
+        if (result2 !== null) {
+          return res.status(200).json({
+            success: true,
+            message: `${result.name} ${result.iata} PM10: ${result2.PM10.concentration} PM2.5: ${result2.PM25.concentration}`,
+          });
         }
       }
 
@@ -419,19 +439,19 @@ app.post("/ask", async (req, res) => {
         console.log("city: ", completionArguments, completionArguments.city)
         args = completionArguments
 
-      runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id )
-        .then((results) => {
-          console.log('All functions completed:', results);
+        runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id)
+          .then((results) => {
+            console.log('All functions completed:', results);
 
-          return res.status(200).json({
-            success: true,
-            message: results
+            return res.status(200).json({
+              success: true,
+              message: results
+            });
+
+          })
+          .catch((error) => {
+            console.error('Error in one of the functions:', error);
           });
-
-        })
-        .catch((error) => {
-          console.error('Error in one of the functions:', error);
-        });
 
       }
 
