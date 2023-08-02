@@ -383,11 +383,22 @@ app.post("/ask", async (req, res) => {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & id: ", completionArguments, completionArguments.location_id)
-        result = await lookupWeather(completionArguments.location_id)
+        response = await lookupWeather(completionArguments.location_id)
+
+
+        const forecast = response.weather[0].description
+        const name = response.name
+        const weather_code = response.weather[0].id
+        const temp = response.main.temp
+        const temp_min = response.main.temp_min
+        const temp_max = response.main.temp_max
+        //console.log(weather_code, forecast, temp, temp_min, temp_max)
+      
+        result2 =  `curent weather in ${name} is ${forecast} with temperature of ${temp}`
 
         return res.status(200).json({
           success: true,
-          message: `${result}`,
+          message: `${result2}`,
         });
       }
 
