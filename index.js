@@ -62,7 +62,7 @@ async function getGoogleMapPOIFunc(lat, lng, textQuery, dist, category) {
         //business_status: d.business_status,
         types: d.types
       }))
-      .splice(0, 4)
+      .splice(0, 5)
       .sort((a, b) => b.rating - a.rating)
   } catch (error) {
     console.log(error.response.data.error_message);
@@ -74,6 +74,7 @@ async function getGoogleMapPOIFunc(lat, lng, textQuery, dist, category) {
   let result3 = result2.map(d => ({
     name: d.name,
     rating: d.rating,
+    formatted_address: d.formatted_address
   }))
   console.log(result3);
   console.log("=================================================");
@@ -586,10 +587,24 @@ app.post("/ask", async (req, res) => {
 
         let url = `https://www.google.com/maps/@${args.lat},${args.lng},15z?entry=ttu`
 
+        let msgs;
+
+        if (result.length == 1) {
+          msgs = url + "\n\n " +
+            "- " + result[0].name + "\n " +
+            "addr: " + result[0].formatted_address + "\n "
+        } else {
+          msgs = url + "\n\n " +
+            "- " + result[0].name + "\n " +
+            "- " + result[1].name + "\n " +
+            "- " + result[2].name + "\n " +
+            "- " + result[3].name + "\n " +
+            "- " + result[4].name + "\n "
+        }
+
         return res.status(200).json({
           success: true,
-          message: result,
-          url: url
+          message: msgs,
         });
 
       }
