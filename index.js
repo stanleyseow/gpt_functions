@@ -1,28 +1,85 @@
-require("dotenv").config();
-const axios = require('axios');
+import pkg from 'openai';
+const { Configuration, OpenAIApi, chatCompletion } = pkg;
+import * as dotenv from 'dotenv';
+import axios from 'axios';
+import express from 'express'
+dotenv.config();
+
+import { Client } from "@googlemaps/google-maps-services-js";
+
+//require("dotenv").config();
+// const express = require("express");
+//const axios = require('axios');
 //const rateLimit = require('axios-rate-limit');
 //const rateLimitedAxios = rateLimit(axios.create(), { maxRequests: 5, perMilliseconds: 1000 }); 
 
-const { Spot } = require('@binance/connector')
+import { Spot } from '@binance/connector'
 const bin_apiKey = process.env.BINANCE_API_KEY
 const bin_apiSecret = process.env.BINANCE_API_SECRET
-
 const rapidAPI = process.env.RAPID_API
 
 const binance = new Spot(bin_apiKey, bin_apiSecret)
 // Examples here 
 //https://github.com/binance/binance-connector-node/tree/master/examples
 
-const express = require("express");
+
 const app = express();
 app.use(express.json());
 
-const { Configuration, OpenAIApi, chatCompletion } = require("openai");
+
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
 const port = process.env.PORT || 5050;
+
+// Google Maps
+async function getGoogleMapPOIFunc(lat, lng, textQuery, dist, category) {
+
+  let result2 = '';
+
+  const client = new Client({});
+  console.log("textQuery: ", textQuery)
+
+  try {
+    const result = await client.textSearch({
+      params: {
+        query: textQuery,
+        radius: dist,
+        type: category,
+        locations: [{ lat: lat, lng: lng }],
+        key: process.env.GOOGLE_MAPS_API_KEY
+      },
+      timeout: 1000, // milliseconds
+    })
+
+    // filter out needed fields
+    result2 = result.data.results
+      .map(d => ({
+        name: d.name,
+        formatted_address: d.formatted_address,
+        rating: d.rating,
+        //business_status: d.business_status,
+        types: d.types
+      }))
+      .splice(0, 4)
+      .sort((a, b) => b.rating - a.rating)
+  } catch (error) {
+    console.log(error.response.data.error_message);
+    throw error;
+  }
+
+  console.log(result2);
+  console.log("=================================================");
+  let result3 = result2.map(d => ({
+    name: d.name,
+    rating: d.rating,
+  }))
+  console.log(result3);
+  console.log("=================================================");
+
+  return result3
+}
 
 
 // return values should not have response.data 
@@ -105,7 +162,7 @@ async function getAirportCode(iata, city) {
   console.log("getAirportCode: ", iata, city)
   let response;
   // Check for nulls 
-  if (iata !== "" ) {
+  if (iata !== "") {
     response = await axios.get(`https://api.api-ninjas.com/v1/airports?iata=${iata}`, {
       headers: {
         'X-Api-Key': rapidAPI
@@ -158,10 +215,12 @@ async function lookupTime(location) {
 }
 
 async function lookupWeather(id) {
-  const response = await
-    axios.get(`https://api.openweathermap.org/data/2.5/weather?units=metric&appid=${process.env.OPENWX_API_KEY}&id=${id}`);
+  console.log("lookupWeather()")
+  let response;
 
-  //console.log(response.data.weather[0].description)
+  response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?units=metric&appid=${process.env.OPENWX_API_KEY}&id=${id}`);
+
+  console.log(response.data.weather[0].description)
 
   const forecast = response.data.weather[0].description
   const name = response.data.name
@@ -341,8 +400,42 @@ app.post("/ask", async (req, res) => {
           required: ["city", "iata", "tz", "wx_id", "wx_city"]
         }
       },
+      {
+        name: "getGoogleMapPOI",
+        description: "get the Point of Interest based on the given distance",
+        parameters: {
+          type: "object",
+          properties: {
+            lat: {
+              type: "number",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the latitude coordinates in decimal degrees from the location in the prompt"
+            },
+            lng: {
+              type: "number",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the longtitude coordinates in decimal degrees from the location in the prompt"
+            },
+            dist: {
+              type: "number",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the distance in km from the prompt"
+            },
+            category: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the Google Map type of category of the POI (point of interest)"
+            },
+            query: {
+              type: "string",
+              // describe to chatGPT what format you need for the API calls
+              description: "Get the Google Maps location from the prompt"
+            },
 
-
+          },
+          required: ["lat", "lng", "category", "query", "dist"]
+        }
+      },
     ],
     function_call: "auto"
   }
@@ -371,7 +464,7 @@ app.post("/ask", async (req, res) => {
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & location: ", completionArguments, completionArguments.location)
 
-        result = await lookupTime(completionArguments.location)
+        let result = await lookupTime(completionArguments.location)
 
         return res.status(200).json({
           success: true,
@@ -383,7 +476,7 @@ app.post("/ask", async (req, res) => {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("Arguments & id: ", completionArguments, completionArguments.location_id)
-        response = await lookupWeather(completionArguments.location_id)
+        let response = await lookupWeather(completionArguments.location_id)
 
 
         const forecast = response.weather[0].description
@@ -393,8 +486,8 @@ app.post("/ask", async (req, res) => {
         const temp_min = response.main.temp_min
         const temp_max = response.main.temp_max
         //console.log(weather_code, forecast, temp, temp_min, temp_max)
-      
-        result2 =  `curent weather in ${name} is ${forecast} with temperature of ${temp}`
+
+        let result2 = `curent weather in ${name} is ${forecast} with temperature of ${temp}`
 
         return res.status(200).json({
           success: true,
@@ -406,7 +499,7 @@ app.post("/ask", async (req, res) => {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("coin pair: ", completionArguments, completionArguments.coinpair)
-        result = await lookupBinancePrice(completionArguments.coinpair)
+        let result = await lookupBinancePrice(completionArguments.coinpair)
 
         return res.status(200).json({
           success: true,
@@ -418,7 +511,7 @@ app.post("/ask", async (req, res) => {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("coin: ", completionArguments, completionArguments.coin)
-        result = await binanceLoanHistory(completionArguments.coin)
+        let result = await binanceLoanHistory(completionArguments.coin)
 
         return res.status(200).json({
           success: true,
@@ -430,11 +523,11 @@ app.post("/ask", async (req, res) => {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("iata: ", completionArguments, completionArguments.iata)
-        result = await getAirportCode(completionArguments.iata)
+        let result = await getAirportCode(completionArguments.iata)
         console.log(result.city)
 
         // Call other functions after first functions
-        result2 = await getAirQuality(result.city)
+        let result2 = await getAirQuality(result.city)
 
         if (result2 !== null) {
           return res.status(200).json({
@@ -448,21 +541,56 @@ app.post("/ask", async (req, res) => {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
         console.log("city: ", completionArguments, completionArguments.city)
-        args = completionArguments
+        let args = completionArguments
 
-        runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id)
-          .then((results) => {
-            console.log('All functions completed:', results);
+        try {
+          let results = await runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id)
+          console.log('All functions completed:', results);
 
-            return res.status(200).json({
-              success: true,
-              message: results
-            });
-
-          })
-          .catch((error) => {
-            console.error('Error in one of the functions:', error);
+          return res.status(200).json({
+            success: true,
+            message: results
           });
+
+        } catch (error) {
+          console.error('Error in one of the functions:', error);
+          throw error;
+        }
+
+        // runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id)
+        //   .then((results) => {
+        //     console.log('All functions completed:', results);
+
+        //     return res.status(200).json({
+        //       success: true,
+        //       message: results
+        //     });
+
+        //   })
+        //   .catch((error) => {
+        //     console.error('Error in one of the functions:', error);
+        //   });
+
+      }
+
+      // google maps POI
+      if (functionCallName === "getGoogleMapPOI") {
+
+        const completionArguments = JSON.parse(completionResponse.function_call.arguments)
+        console.log("args: ", completionArguments)
+        let args = completionArguments
+
+        const result = await getGoogleMapPOIFunc(args.lat, args.lng, args.query, args.dist, args.category)
+
+        //https://www.google.com/maps/@3.1618342,101.6499131,15z?entry=ttu
+
+        let url = `https://www.google.com/maps/@${args.lat},${args.lng},15z?entry=ttu`
+
+        return res.status(200).json({
+          success: true,
+          message: result,
+          url: url
+        });
 
       }
 
