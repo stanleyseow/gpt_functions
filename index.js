@@ -1,39 +1,40 @@
-import pkg from 'openai';
-const { Configuration, OpenAIApi, chatCompletion } = pkg;
-import * as dotenv from 'dotenv';
-import axios from 'axios';
-import express from 'express'
-dotenv.config();
-
-import { Client } from "@googlemaps/google-maps-services-js";
-
-//require("dotenv").config();
-// const express = require("express");
-//const axios = require('axios');
-//const rateLimit = require('axios-rate-limit');
-//const rateLimitedAxios = rateLimit(axios.create(), { maxRequests: 5, perMilliseconds: 1000 }); 
-
-import { Spot } from '@binance/connector'
-const bin_apiKey = process.env.BINANCE_API_KEY
-const bin_apiSecret = process.env.BINANCE_API_SECRET
-const rapidAPI = process.env.RAPID_API
-
-const binance = new Spot(bin_apiKey, bin_apiSecret)
-// Examples here 
-//https://github.com/binance/binance-connector-node/tree/master/examples
-
-
-const app = express();
-app.use(express.json());
-
+import openpkg from 'openai';
+const { Configuration, OpenAIApi, chatCompletion } = openpkg;
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
+
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+import axios from 'axios';
+
+import express from 'express'
+const app = express();
+app.use(express.json());
 const port = process.env.PORT || 5050;
 
-// Google Maps
+import { Client } from "@googlemaps/google-maps-services-js";
+
+//const axios = require('axios');
+//const rateLimit = require('axios-rate-limit');
+//const rateLimitedAxios = rateLimit(axios.create(), { maxRequests: 5, perMilliseconds: 1000 });
+
+// Examples here
+//https://github.com/binance/binance-connector-node/tree/master/examples
+import { Spot } from '@binance/connector'
+const bin_apiKey = process.env.BINANCE_API_KEY
+const bin_apiSecret = process.env.BINANCE_API_SECRET
+const binance = new Spot(bin_apiKey, bin_apiSecret)
+
+const rapidAPI = process.env.RAPID_API
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// Google Map POI
+///////////////////////////////////////////////////////////////////////////////////////////////
+
 async function getGoogleMapPOIFunc(lat, lng, textQuery, dist, category) {
 
   let result2 = '';
@@ -82,8 +83,10 @@ async function getGoogleMapPOIFunc(lat, lng, textQuery, dist, category) {
   return result3
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// Running multiple functions
+///////////////////////////////////////////////////////////////////////////////////////////////
 
-// return values should not have response.data 
 async function runAllCityfunctions(city, iata, tz, wx_id) {
 
   // getAirportCode returned already formatted
@@ -158,6 +161,9 @@ async function runAllCityfunctions(city, iata, tz, wx_id) {
   }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// getAirportCode
+///////////////////////////////////////////////////////////////////////////////////////////////
 async function getAirportCode(iata, city) {
 
   console.log("getAirportCode: ", iata, city)
@@ -185,6 +191,11 @@ async function getAirportCode(iata, city) {
   return data
 }
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// getAirQuality
+///////////////////////////////////////////////////////////////////////////////////////////////
+
 async function getAirQuality(city) {
   const response = await axios.get(`https://api.api-ninjas.com/v1/airquality?city=${city}`, {
     headers: {
@@ -200,6 +211,9 @@ async function getAirQuality(city) {
   return data
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// lookupTime
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 async function lookupTime(location) {
   const response = await axios.get(`http://worldtimeapi.org/api/timezone/${location}`);
@@ -214,6 +228,10 @@ async function lookupTime(location) {
   //return `current time in ${location} in ${localTime}`;
   return response.data
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// lookupWeather
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 async function lookupWeather(id) {
   console.log("lookupWeather()")
@@ -235,10 +253,18 @@ async function lookupWeather(id) {
   return response.data
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// getStartEndDate
+///////////////////////////////////////////////////////////////////////////////////////////////
+
 async function getStartEndDate(startDate, endDate) {
   console.log(startDate, endDate)
   return `The startdate is ${startDate}, the enddate is ${endDate}`
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////
+//// lookupBinancePrice
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 async function lookupBinancePrice(coinPair) {
   const response = await binance.avgPrice(coinPair);
@@ -247,12 +273,8 @@ async function lookupBinancePrice(coinPair) {
   return `the average price of ${coinPair} is ${coinPrice}`
 }
 
-async function binanceLoanHistory(coinPair) {
-  const response = await binance.loanHistory(coinPair);
-  console.log("Response: ", response.data)
-  const coinPrice = response.data
-  return `the loan history ${coinPair} is ${coinPrice}`
-}
+
+
 
 app.post("/ask", async (req, res) => {
   const prompt = req.body.prompt;
@@ -263,6 +285,10 @@ app.post("/ask", async (req, res) => {
       { role: "system", content: "You are a helpful assistance" },
       { role: "user", content: prompt }
     ],
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    //// Describe the function parameters needed for openAI
+    ///////////////////////////////////////////////////////////////////////////////////////////////
     functions: [
       {
         name: "lookupTime",
@@ -314,21 +340,7 @@ app.post("/ask", async (req, res) => {
           required: ["coinpair"]
         }
       },
-      {
-        name: "BinanceLoanHistory",
-        description: "get the current crypto loan history",
-        parameters: {
-          type: "object",
-          properties: {
-            coin: {
-              type: "string",
-              // describe to chatGPT what format you need for the API calls
-              description: "The crypto token or coin, e.g. Binance, should be written in BNB format"
-            },
-          },
-          required: ["coin"]
-        }
-      },
+
       {
         name: "getStartEndDate",
         description: "get the start and end date for a given time period",
@@ -460,6 +472,10 @@ app.post("/ask", async (req, res) => {
       const functionCallName = completionResponse.function_call.name;
       console.log("functionCallName: ", functionCallName)
 
+      ///////////////////////////////////////////////////////////////////////////////////////////////
+      //// openAI matching which functions to call from the given prompt 
+      ///////////////////////////////////////////////////////////////////////////////////////////////
+
       if (functionCallName === "lookupTime") {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
@@ -508,18 +524,6 @@ app.post("/ask", async (req, res) => {
         });
       }
 
-      if (functionCallName === "BinanceLoanHistory") {
-        // Need to parse the arguments with JSON.parse()
-        const completionArguments = JSON.parse(completionResponse.function_call.arguments)
-        console.log("coin: ", completionArguments, completionArguments.coin)
-        let result = await binanceLoanHistory(completionArguments.coin)
-
-        return res.status(200).json({
-          success: true,
-          message: `${result} `,
-        });
-      }
-
       if (functionCallName === "getAirportCode") {
         // Need to parse the arguments with JSON.parse()
         const completionArguments = JSON.parse(completionResponse.function_call.arguments)
@@ -557,20 +561,6 @@ app.post("/ask", async (req, res) => {
           console.error('Error in one of the functions:', error);
           throw error;
         }
-
-        // runAllCityfunctions(args.wx_city, args.iata, args.tz, args.wx_id)
-        //   .then((results) => {
-        //     console.log('All functions completed:', results);
-
-        //     return res.status(200).json({
-        //       success: true,
-        //       message: results
-        //     });
-
-        //   })
-        //   .catch((error) => {
-        //     console.error('Error in one of the functions:', error);
-        //   });
 
       }
 
