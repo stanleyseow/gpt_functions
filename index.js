@@ -29,7 +29,7 @@ const bin_apiKey = process.env.BINANCE_API_KEY
 const bin_apiSecret = process.env.BINANCE_API_SECRET
 const binance = new Spot(bin_apiKey, bin_apiSecret)
 
-const rapidAPI = process.env.RAPID_API
+const ninjaAPI = process.env.NINJA_API
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 //// Google Map POI
@@ -172,14 +172,14 @@ async function getAirportCode(iata, city) {
   if (iata !== "") {
     response = await axios.get(`https://api.api-ninjas.com/v1/airports?iata=${iata}`, {
       headers: {
-        'X-Api-Key': rapidAPI
+        'X-Api-Key': ninjaAPI
       },
       params: {}
     })
   } else {
     response = await axios.get(`https://api.api-ninjas.com/v1/airports?city=${city}`, {
       headers: {
-        'X-Api-Key': rapidAPI
+        'X-Api-Key': ninjaAPI
       },
       params: {}
     })
@@ -199,7 +199,7 @@ async function getAirportCode(iata, city) {
 async function getAirQuality(city) {
   const response = await axios.get(`https://api.api-ninjas.com/v1/airquality?city=${city}`, {
     headers: {
-      'X-Api-Key': rapidAPI
+      'X-Api-Key': ninjaAPI
     },
     params: {}
   })
