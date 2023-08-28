@@ -1,17 +1,22 @@
-import openpkg from 'openai';
-const { Configuration, OpenAIApi, chatCompletion } = openpkg;
+//import openpkg from 'openai';
+//const { Configuration, OpenAIApi, chatCompletion } = openpkg;
+//const configuration = new Configuration({
+//apiKey: process.env.OPENAI_API_KEY,
+//});
+//const openai = new OpenAIApi(configuration);
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
-
+import OpenAI from 'openai'
 import * as dotenv from 'dotenv';
+import axios from 'axios';
+import express from 'express'
+
 dotenv.config();
 
-import axios from 'axios';
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
 
-import express from 'express'
+
 const app = express();
 app.use(express.json());
 const port = process.env.PORT || 5050;
@@ -270,7 +275,7 @@ async function lookupBinancePrice(coinPair) {
   const response = await binance.avgPrice(coinPair);
   //console.log(response.data)
   const coinPrice = response.data.price
-  return `the average price of ${coinPair} is ${coinPrice}`
+  return `the price of ${coinPair} is ${coinPrice}`
 }
 
 
@@ -279,7 +284,7 @@ async function lookupBinancePrice(coinPair) {
 app.post("/ask", async (req, res) => {
   const prompt = req.body.prompt;
 
-  const param1 = {
+  const param = {
     model: "gpt-3.5-turbo-0613",
     messages: [
       { role: "system", content: "You are a helpful assistance" },
@@ -460,10 +465,9 @@ app.post("/ask", async (req, res) => {
     }
 
     // configure at top of page endpoint, params, headers
-    const completion = await openai.createChatCompletion(param1)
+    const chatCompletion = await openai.chat.completions.create(param)
+    const completionResponse = chatCompletion.choices[0].message;
 
-    const completionResponse = completion.data.choices[0].message;
-    console.log(completion.data);
     console.log("completionResponse: ", completionResponse)
     //console.log("content: ",completionResponse.content)
 
