@@ -508,7 +508,7 @@ app.post("/ask", async (req, res) => {
         const temp_max = response.main.temp_max
         //console.log(weather_code, forecast, temp, temp_min, temp_max)
 
-        let result2 = `curent weather in ${name} is ${forecast} with temperature of ${temp}`
+        let result2 = `current weather in ${name} is ${forecast} with temperature of ${temp}`
 
         return res.status(200).json({
           success: true,
